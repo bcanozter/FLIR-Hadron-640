@@ -56,9 +56,15 @@ VideoDevice::VideoDevice(QObject *parent) : QObject(parent) {}
 
 VideoDevice::~VideoDevice() { close(); }
 
-bool VideoDevice::open(const QString &path) {
+bool VideoDevice::open(const QString &path, uint32_t pixelFormat) {
 
   close();
+
+  if (pixelFormat != V4L2_PIX_FMT_Y16 && pixelFormat != V4L2_PIX_FMT_YUV420) {
+    qWarning() << "Unsupported pixel format" << Qt::hex << pixelFormat;
+    return false;
+  }
+  pixelFormat_ = pixelFormat;
 
   fd_ = ::open(path.toLocal8Bit().constData(), O_RDWR | O_NONBLOCK);
 
@@ -92,7 +98,7 @@ bool VideoDevice::open(const QString &path) {
   fmt.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
   fmt.fmt.pix.width = kBosonWidth;
   fmt.fmt.pix.height = kBosonHeight;
-  fmt.fmt.pix.pixelformat = V4L2_PIX_FMT_Y16;
+  fmt.fmt.pix.pixelformat = pixelFormat;
   fmt.fmt.pix.field = V4L2_FIELD_INTERLACED;
   if (xioctl(fd_, VIDIOC_S_FMT, &fmt) < 0) {
     qWarning() << "VIDIOC_S_FMT failed:" << strerror(errno);
@@ -100,11 +106,11 @@ bool VideoDevice::open(const QString &path) {
     return false;
   }
 
-  if (fmt.fmt.pix.pixelformat != V4L2_PIX_FMT_Y16 ||
+  if (fmt.fmt.pix.pixelformat != pixelFormat ||
       fmt.fmt.pix.width != kBosonWidth || fmt.fmt.pix.height != kBosonHeight) {
-    qWarning() << "Driver did not accept Y16" << kBosonWidth << "x"
-               << kBosonHeight << "(got" << fmt.fmt.pix.width << "x"
-               << fmt.fmt.pix.height << ")";
+    qWarning() << "Driver did not accept pixel format" << Qt::hex << pixelFormat
+               << Qt::dec << kBosonWidth << "x" << kBosonHeight << "(received"
+               << fmt.fmt.pix.width << "x" << fmt.fmt.pix.height << ")";
     close();
     return false;
   }
@@ -227,23 +233,67 @@ void VideoDevice::onReadable_() {
     return;
   }
 
-  const size_t frameBytes =
-      size_t(kBosonWidth) * kBosonHeight * sizeof(uint16_t);
+  const size_t pixels = size_t(kBosonWidth) * kBosonHeight;
+  // yu12 1.5 bytes per pixel(12-bits)
+  // confirmed with
+  /*
+  v4l2-ctl -d /dev/video2 --get-fmt-video
+Format Video Capture:
+        Width/Height      : 640/512
+        Pixel Format      : 'YU12' (Planar YUV 4:2:0)
+        Field             : None
+        Bytes per Line    : 640
+        Size Image        : 491520
+        Colorspace        : sRGB
+        Transfer Function : Rec. 709
+        YCbCr/HSV Encoding: Rec. 709
+        Quantization      : Default (maps to Limited Range)
+  
+  For Y16
+  v4l2-ctl -d /dev/video2 --get-fmt-video
+Format Video Capture:
+        Width/Height      : 640/512
+        Pixel Format      : 'Y16 ' (16-bit Greyscale)
+        Field             : None
+        Bytes per Line    : 1280
+        Size Image        : 655360
+        Colorspace        : sRGB
+        Transfer Function : Rec. 709
+        YCbCr/HSV Encoding: Rec. 709
+        Quantization      : Default (maps to Full Range)
+  */
+  const size_t frameBytes = pixelFormat_ == V4L2_PIX_FMT_Y16
+                                ? pixels * sizeof(uint16_t)
+                                : pixels * 1.5;
 
   if (buf.flags & V4L2_BUF_FLAG_ERROR || buf.bytesused < frameBytes) {
-    qWarning() << "Dropping frame: bytesused" << buf.bytesused << "expected"
-               << frameBytes;
-  } else {
+    qWarning() << "Dropping frame:"
+               << ((buf.flags & V4L2_BUF_FLAG_ERROR)
+                       ? "V4L2_BUF_FLAG_ERROR set,"
+                       : "short frame,")
+               << "bytesused" << buf.bytesused << "expected" << frameBytes;
+  } else if (pixelFormat_ == V4L2_PIX_FMT_Y16) {
 
-    RawFrame frame;
+    Y16Frame frame;
 
     frame.width = kBosonWidth;
     frame.height = kBosonHeight;
-    frame.pixels.resize(size_t(kBosonWidth) * kBosonHeight);
+    frame.pixels.resize(pixels);
 
     std::memcpy(frame.pixels.data(), buffers_[buf.index].start, frameBytes);
 
-    emit frameReceived(frame);
+    emit Y16FrameReceived(frame);
+  } else {
+
+    YU12Frame frame;
+
+    frame.width = kBosonWidth;
+    frame.height = kBosonHeight;
+    frame.bytes.resize(frameBytes);
+
+    std::memcpy(frame.bytes.data(), buffers_[buf.index].start, frameBytes);
+
+    emit YU12FrameReceived(frame);
   }
 
   if (fd_ < 0) {

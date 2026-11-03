@@ -27,11 +27,12 @@ public:
   ~VideoDevice() override;
 
 
-  bool open(const QString &path);
+  bool open(const QString &path, uint32_t pixelFormat);
   void close();
 
 signals:
-  void frameReceived(const RawFrame &frame);
+  void Y16FrameReceived(const Y16Frame &frame);
+  void YU12FrameReceived(const YU12Frame &frame);
   void deviceError();
 
 private slots:
@@ -46,5 +47,6 @@ private:
   int fd_ = -1;
   QSocketNotifier *notifier_ = nullptr;
   std::vector<MappedBuffer> buffers_;
+  uint32_t pixelFormat_ = 0;
 
 };

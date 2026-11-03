@@ -7,7 +7,7 @@ RawFrameView::RawFrameView(QWidget *parent) : QWidget(parent) {
 }
 
 // https://github.com/FLIR/BosonUSB/blob/master/BosonUSB.cpp#L88
-void RawFrameView::AGC_Basic_Linear(const RawFrame &input_16, QImage &output_8,
+void RawFrameView::AGC_Basic_Linear(const Y16Frame &input_16, QImage &output_8,
                                     int h, int w) {
 
   uint16_t min1 = 0xFFFF;
@@ -41,13 +41,22 @@ void RawFrameView::AGC_Basic_Linear(const RawFrame &input_16, QImage &output_8,
   }
 }
 
-void RawFrameView::setFrame(const RawFrame &frame) {
+void RawFrameView::setFrame(const Y16Frame &frame) {
 
   image_ = QImage(frame.width, frame.height, QImage::Format_Grayscale8);
   if (image_.isNull()) {
     return;
   }
   AGC_Basic_Linear(frame, image_, frame.height, frame.width);
+
+  update();
+}
+
+void RawFrameView::setYU12Frame(const YU12Frame &frame) {
+
+  image_ = QImage(frame.bytes.data(), frame.width, frame.height, frame.width,
+                  QImage::Format_Grayscale8)
+               .copy();
 
   update();
 }

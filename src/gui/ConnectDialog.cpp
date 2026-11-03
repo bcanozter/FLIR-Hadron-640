@@ -8,6 +8,8 @@
 #include <QPushButton>
 #include <QVBoxLayout>
 
+#include <linux/videodev2.h>
+
 #include "../core/SerialPort.h"
 #include "../core/VideoDevice.h"
 
@@ -49,6 +51,10 @@ ConnectDialog::ConnectDialog(QWidget *parent) : QDialog(parent) {
 
   videoDeviceCombo_ = new QComboBox(this);
 
+  videoFormatCombo_ = new QComboBox(this);
+  videoFormatCombo_->addItem(tr("'Y16 ' (16-bit Greyscale)"), uint(V4L2_PIX_FMT_Y16));
+  videoFormatCombo_->addItem(tr("'YU12' (Planar YUV 4:2:0)"), uint(V4L2_PIX_FMT_YUV420));
+
   auto *refreshButton = new QPushButton(tr("Refresh"), this);
   connect(refreshButton, &QPushButton::clicked, this,
           &ConnectDialog::handleRefresh_);
@@ -57,6 +63,7 @@ ConnectDialog::ConnectDialog(QWidget *parent) : QDialog(parent) {
   form->addRow(tr("Control port (serial):"), controlPortCombo_);
   form->addRow(tr("Baud rate:"), controlPortBaudCombo_);
   form->addRow(tr("Video device (V4L2):"), videoDeviceCombo_);
+  form->addRow(tr("Video format:"), videoFormatCombo_);
 
   auto *buttons = new QDialogButtonBox(
       QDialogButtonBox::Ok | QDialogButtonBox::Cancel, this);
@@ -110,4 +117,8 @@ int ConnectDialog::getControlPortBaudRate() const {
 
 QString ConnectDialog::getVideoDevicePath() const {
   return videoDeviceCombo_->currentData().toString();
+}
+
+uint32_t ConnectDialog::getVideoPixelFormat() const {
+  return videoFormatCombo_->currentData().toUInt();
 }

@@ -10,9 +10,11 @@ class RawFrameView : public QWidget {
 public:
   explicit RawFrameView(QWidget *parent = nullptr);
 
-  void AGC_Basic_Linear(const RawFrame &input_16, QImage &output_8, int h,
+  void AGC_Basic_Linear(const Y16Frame &input_16, QImage &output_8, int h,
                         int w);
-  void setFrame(const RawFrame &frame);
+  void setFrame(const Y16Frame &frame);
+
+  void setYU12Frame(const YU12Frame &frame);
   void clear();
 
 protected:
