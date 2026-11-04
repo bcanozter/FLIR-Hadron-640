@@ -14,6 +14,10 @@ qt_standard_project_setup()
 
 qt_add_executable(flir_hadron_640
     # core
+    src/core/BosonProtocol.cpp
+    src/core/BosonProtocol.h
+    src/core/ControlPort.cpp
+    src/core/ControlPort.h
     src/core/RawFrame.h
     src/core/SerialPort.cpp
     src/core/SerialPort.h
